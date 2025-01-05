@@ -305,8 +305,8 @@ const VideoClipExtractor = () => {
           Upload a video and press [ to create a clip (1 second before and after
           the current time).
           <br />
-          Keyboard shortcuts: Space (play/pause), [ (create clip), Left/Right
-          (frame by frame), O (back 10s), P (forward 10s).
+          Keyboard shortcuts: Space (play/pause), [ (create clip), 
+          Left/Right (frame by frame), O (back 10s), P (forward 10s).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -318,7 +318,7 @@ const VideoClipExtractor = () => {
             className="w-full"
           />
         </div>
-
+  
         {videoUrl && (
           <div className="space-y-4">
             {/* Video Player */}
@@ -330,7 +330,7 @@ const VideoClipExtractor = () => {
                 onTimeUpdate={handleTimeUpdate}
               />
             </div>
-
+  
             {/* Play/Pause, Current Time, Playback Speed */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -347,7 +347,7 @@ const VideoClipExtractor = () => {
                   )}
                 </Button>
               </div>
-
+  
               <div className="text-center flex items-center space-x-2">
                 <span>Current Time:</span>
                 <Input
@@ -357,7 +357,7 @@ const VideoClipExtractor = () => {
                   className="w-24"
                 />
               </div>
-
+  
               <div className="text-center flex items-center space-x-2">
                 <span>Playback Speed:</span>
                 <div className="flex items-center space-x-2">
@@ -388,7 +388,7 @@ const VideoClipExtractor = () => {
                 </div>
               </div>
             </div>
-
+  
             {/* Navigation and Current Clip Info */}
             {clips.length > 0 && (
               <div className="space-y-4">
@@ -412,21 +412,17 @@ const VideoClipExtractor = () => {
                     Next Clip
                   </Button>
                 </div>
-
+  
                 {/* Current Clip Info */}
                 <div className="border rounded-lg p-4">
-                  <h3 className="text-lg font-medium mb-2">
-                    Current Clip Info
-                  </h3>
+                  <h3 className="text-lg font-medium mb-2">Current Clip Info</h3>
                   <div className="flex flex-col space-y-4">
                     <div className="flex space-x-4 items-center">
                       <div className="flex items-center space-x-2">
                         <span>Start Time:</span>
                         <Input
                           type="text"
-                          value={
-                            clips[currentClipIndex]?.startTime.toFixed(3) || ""
-                          }
+                          value={clips[currentClipIndex]?.startTime.toFixed(3) || ""}
                           onChange={(e) => {
                             const value = parseFloat(e.target.value);
                             if (!isNaN(value) && value >= 0) {
@@ -447,15 +443,10 @@ const VideoClipExtractor = () => {
                         <span>End Time:</span>
                         <Input
                           type="text"
-                          value={
-                            clips[currentClipIndex]?.endTime?.toFixed(3) || ""
-                          }
+                          value={clips[currentClipIndex]?.endTime?.toFixed(3) || ""}
                           onChange={(e) => {
                             const value = parseFloat(e.target.value);
-                            if (
-                              !isNaN(value) &&
-                              value > clips[currentClipIndex]?.startTime
-                            ) {
+                            if (!isNaN(value) && value > clips[currentClipIndex]?.startTime) {
                               setClips((prevClips) => {
                                 const newClips = [...prevClips];
                                 newClips[currentClipIndex] = {
@@ -470,12 +461,12 @@ const VideoClipExtractor = () => {
                         />
                       </div>
                     </div>
-
+  
                     {/* Shot Type Selection */}
                     <div className="flex items-center space-x-2">
                       <span>Shot Type:</span>
                       <Select
-                        value={clips[currentClipIndex].shotType || ""}
+                        value={clips[currentClipIndex]?.shotType || ""}
                         onValueChange={(value) => {
                           setClips((prevClips) => {
                             const newClips = [...prevClips];
@@ -501,7 +492,7 @@ const VideoClipExtractor = () => {
                     </div>
                   </div>
                 </div>
-
+  
                 {/* Preview Clips and Extract Clips */}
                 <div className="space-y-4">
                   <Button
@@ -511,14 +502,21 @@ const VideoClipExtractor = () => {
                   >
                     {isPreviewMode ? "Stop Preview" : "Preview Clips"}
                   </Button>
-
+  
                   <Button
                     className="w-full"
-                    onClick={extractClips}
+                    onClick={async () => {
+                      await extractClips();
+                      setCurrentClipIndex(0); // Reset clip index after extraction
+                    }}
                     disabled={isExtracting || clips.length === 0}
                   >
                     {isExtracting ? "Processing Clips..." : "Extract All Clips"}
                   </Button>
+  
+                  {isExtracting && (
+                    <Progress value={progress} className="w-full" />
+                  )}
                 </div>
               </div>
             )}
@@ -526,7 +524,7 @@ const VideoClipExtractor = () => {
         )}
       </CardContent>
     </Card>
-  );
+  );  
 };
 
 export default VideoClipExtractor;
