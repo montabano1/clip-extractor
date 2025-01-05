@@ -302,13 +302,11 @@ const VideoClipExtractor = () => {
       <CardHeader>
         <CardTitle>Video Clip Extractor</CardTitle>
         <CardDescription>
-          Upload a video and press [ to start a clip, ] to end it.
+          Upload a video and press [ to create a clip (1 second before and after
+          the current time).
           <br />
-          Keyboard shortcuts: Space (play/pause), [ (start clip), ] (end clip)
-          <br />
-          Navigation: Left/Right (frame by frame), O (back 10s), P (forward 10s)
-          <br />
-          Preview: Up/Down arrows to navigate between clips
+          Keyboard shortcuts: Space (play/pause), [ (create clip), Left/Right
+          (frame by frame), O (back 10s), P (forward 10s).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -323,6 +321,7 @@ const VideoClipExtractor = () => {
 
         {videoUrl && (
           <div className="space-y-4">
+            {/* Video Player */}
             <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden">
               <video
                 ref={videoRef}
@@ -332,8 +331,8 @@ const VideoClipExtractor = () => {
               />
             </div>
 
+            {/* Play/Pause, Current Time, Playback Speed */}
             <div className="flex items-center justify-between">
-              {/* Play/Pause Button */}
               <div className="flex items-center space-x-4">
                 <Button
                   variant="outline"
@@ -349,7 +348,6 @@ const VideoClipExtractor = () => {
                 </Button>
               </div>
 
-              {/* Editable Current Time */}
               <div className="text-center flex items-center space-x-2">
                 <span>Current Time:</span>
                 <Input
@@ -360,7 +358,6 @@ const VideoClipExtractor = () => {
                 />
               </div>
 
-              {/* Editable Playback Speed */}
               <div className="text-center flex items-center space-x-2">
                 <span>Playback Speed:</span>
                 <div className="flex items-center space-x-2">
@@ -392,160 +389,137 @@ const VideoClipExtractor = () => {
               </div>
             </div>
 
-            {/* Clips List */}
-            <div className="mt-4 border rounded-lg p-4">
-              <h3 className="text-lg font-medium mb-2">
-                Collected Clips: {clips.length}
-              </h3>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {clips.map((clip, index) => (
-                  <div
-                    key={index}
-                    className={`p-2 border rounded flex justify-between items-center ${
-                      currentClipIndex === index && isPreviewMode
-                        ? "bg-accent"
-                        : ""
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <Input
-                        type="text"
-                        defaultValue={clip.startTime.toFixed(3)} // Set the initial value
-                        onBlur={(e) => {
-                          const value = parseFloat(e.target.value);
-                          if (!isNaN(value) && value >= 0) {
-                            setClips((prevClips) => {
-                              const newClips = [...prevClips];
-                              newClips[index] = { ...clip, startTime: value };
-                              return newClips;
-                            });
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            const value = parseFloat(
-                              (e.target as HTMLInputElement).value
-                            );
-                            if (!isNaN(value) && value >= 0) {
-                              setClips((prevClips) => {
-                                const newClips = [...prevClips];
-                                newClips[index] = { ...clip, startTime: value };
-                                return newClips;
-                              });
-                            }
-                          }
-                        }}
-                        className="w-24"
-                      />
-
-                      <span>-</span>
-                      <Input
-                        type="text"
-                        defaultValue={clip.endTime?.toFixed(3) || ""}
-                        onBlur={(e) => {
-                          const value = parseFloat(e.target.value);
-                          if (!isNaN(value) && value > clip.startTime) {
-                            setClips((prevClips) => {
-                              const newClips = [...prevClips];
-                              newClips[index] = { ...clip, endTime: value };
-                              return newClips;
-                            });
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            const value = parseFloat(
-                              (e.target as HTMLInputElement).value
-                            );
-                            if (!isNaN(value) && value > clip.startTime) {
-                              setClips((prevClips) => {
-                                const newClips = [...prevClips];
-                                newClips[index] = { ...clip, endTime: value };
-                                return newClips;
-                              });
-                            }
-                          }
-                        }}
-                        className="w-24"
-                      />
-                    </div>
-                    {clip.endTime && (
-                      <div className="flex items-center space-x-2">
-                        <Select
-                          value={clip.shotType}
-                          onValueChange={(value) => {
-                            setClips((prevClips) => {
-                              const newClips = [...prevClips];
-                              newClips[index] = { ...clip, shotType: value };
-                              return newClips;
-                            });
-                          }}
-                        >
-                          <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Select shot type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {shotTypes.map((type) => (
-                              <SelectItem key={type} value={type}>
-                                {type.replace("_", " ").toUpperCase()}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            setClips((prevClips) =>
-                              prevClips.filter((_, i) => i !== index)
-                            );
-                          }}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Preview Controls */}
+            {/* Navigation and Current Clip Info */}
             {clips.length > 0 && (
               <div className="space-y-4">
-                <div className="flex justify-between items-center">
+                {/* Navigation Buttons */}
+                <div className="flex justify-center items-center space-x-4">
                   <Button
                     variant="outline"
                     onClick={handlePrevClip}
-                    disabled={currentClipIndex === 0 || !isPreviewMode}
+                    disabled={currentClipIndex === 0}
                   >
                     Previous Clip
                   </Button>
-                  <Button variant="outline" onClick={handleClipPreview}>
-                    {isPreviewMode ? "Stop Preview" : "Preview Clips"}
-                  </Button>
+                  <span className="text-sm font-medium">
+                    Clip {currentClipIndex + 1}/{clips.length}
+                  </span>
                   <Button
                     variant="outline"
                     onClick={handleNextClip}
-                    disabled={
-                      currentClipIndex === clips.length - 1 || !isPreviewMode
-                    }
+                    disabled={currentClipIndex === clips.length - 1}
                   >
                     Next Clip
                   </Button>
                 </div>
 
-                <Button
-                  className="w-full"
-                  onClick={extractClips}
-                  disabled={isExtracting || clips.length === 0}
-                >
-                  {isExtracting ? "Processing Clips..." : "Process All Clips"}
-                </Button>
+                {/* Current Clip Info */}
+                <div className="border rounded-lg p-4">
+                  <h3 className="text-lg font-medium mb-2">
+                    Current Clip Info
+                  </h3>
+                  <div className="flex flex-col space-y-4">
+                    <div className="flex space-x-4 items-center">
+                      <div className="flex items-center space-x-2">
+                        <span>Start Time:</span>
+                        <Input
+                          type="text"
+                          value={
+                            clips[currentClipIndex]?.startTime.toFixed(3) || ""
+                          }
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value);
+                            if (!isNaN(value) && value >= 0) {
+                              setClips((prevClips) => {
+                                const newClips = [...prevClips];
+                                newClips[currentClipIndex] = {
+                                  ...newClips[currentClipIndex],
+                                  startTime: value,
+                                };
+                                return newClips;
+                              });
+                            }
+                          }}
+                          className="w-24"
+                        />
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span>End Time:</span>
+                        <Input
+                          type="text"
+                          value={
+                            clips[currentClipIndex]?.endTime?.toFixed(3) || ""
+                          }
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value);
+                            if (
+                              !isNaN(value) &&
+                              value > clips[currentClipIndex]?.startTime
+                            ) {
+                              setClips((prevClips) => {
+                                const newClips = [...prevClips];
+                                newClips[currentClipIndex] = {
+                                  ...newClips[currentClipIndex],
+                                  endTime: value,
+                                };
+                                return newClips;
+                              });
+                            }
+                          }}
+                          className="w-24"
+                        />
+                      </div>
+                    </div>
 
-                {isExtracting && (
-                  <Progress value={progress} className="w-full" />
-                )}
+                    {/* Shot Type Selection */}
+                    <div className="flex items-center space-x-2">
+                      <span>Shot Type:</span>
+                      <Select
+                        value={clips[currentClipIndex].shotType || ""}
+                        onValueChange={(value) => {
+                          setClips((prevClips) => {
+                            const newClips = [...prevClips];
+                            newClips[currentClipIndex] = {
+                              ...newClips[currentClipIndex],
+                              shotType: value,
+                            };
+                            return newClips;
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="Select shot type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {shotTypes.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type.replace("_", " ").toUpperCase()}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preview Clips and Extract Clips */}
+                <div className="space-y-4">
+                  <Button
+                    variant="outline"
+                    onClick={handleClipPreview}
+                    className="w-full"
+                  >
+                    {isPreviewMode ? "Stop Preview" : "Preview Clips"}
+                  </Button>
+
+                  <Button
+                    className="w-full"
+                    onClick={extractClips}
+                    disabled={isExtracting || clips.length === 0}
+                  >
+                    {isExtracting ? "Processing Clips..." : "Extract All Clips"}
+                  </Button>
+                </div>
               </div>
             )}
           </div>
