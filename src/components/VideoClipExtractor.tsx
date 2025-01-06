@@ -20,6 +20,46 @@ import {
 import { Play, Pause, X, SkipBack, SkipForward } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
+const uploadClipToS3 = async (clipBlob, fileName) => {
+    try {
+      console.log(`Uploading clip: ${fileName}, Blob size: ${clipBlob.size} bytes`);
+  
+      // Convert Blob to ArrayBuffer
+      const fileContent = await clipBlob.arrayBuffer();
+      
+      // Create a new FileReader
+      const reader = new FileReader();
+      
+      // Convert the Blob to base64 using FileReader
+      const base64Content = await new Promise((resolve, reject) => {
+        reader.onload = () => {
+          // Get the base64 string without the data URL prefix
+          const base64 = reader.result.split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(clipBlob);
+      });
+  
+      // Upload to S3 via API
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName, fileContent: base64Content }),
+      });
+  
+      if (!response.ok) {
+        throw new Error(`Failed to upload clip ${fileName}`);
+      }
+  
+      const result = await response.json();
+      console.log(`Upload successful: ${fileName}`, result);
+    } catch (error) {
+      console.error("Error uploading clip to S3:", error);
+      throw error; // Propagate the error to `extractClips`
+    }
+  };
+
 interface Clip {
   startTime: number;
   endTime?: number;
@@ -97,13 +137,13 @@ const VideoClipExtractor = () => {
         case "o": // 10 seconds backward
           e.preventDefault();
           if (videoRef.current) {
-            videoRef.current.currentTime -= 10;
+            videoRef.current.currentTime -= 5;
           }
           break;
         case "p": // 10 seconds forward
           e.preventDefault();
           if (videoRef.current) {
-            videoRef.current.currentTime += 10;
+            videoRef.current.currentTime += 5;
           }
           break;
       }
@@ -225,6 +265,22 @@ const VideoClipExtractor = () => {
     }
   };
 
+  const handleDeleteClip = () => {
+    if (clips.length === 0) return; // No clips to delete
+    setClips((prevClips) => {
+      const newClips = prevClips.filter(
+        (_, index) => index !== currentClipIndex
+      );
+      // Adjust the current clip index to stay within bounds
+      if (currentClipIndex >= newClips.length && newClips.length > 0) {
+        setCurrentClipIndex(newClips.length - 1);
+      } else if (newClips.length === 0) {
+        setCurrentClipIndex(0); // Reset if all clips are deleted
+      }
+      return newClips;
+    });
+  };
+
   const skipForward = () => {
     if (videoRef.current) {
       videoRef.current.currentTime += 1 / 30; // Skip one frame (assuming 30fps)
@@ -250,11 +306,13 @@ const VideoClipExtractor = () => {
   };
 
   const extractClips = async () => {
+    console.log("Starting clip extraction...");
+    
     if (!videoFile || clips.length === 0) {
-      alert("Please provide video and create clips");
+      alert("Please provide a video and create clips");
       return;
     }
-
+  
     const unfinishedClips = clips.filter(
       (clip) => !clip.shotType || !clip.endTime
     );
@@ -262,40 +320,58 @@ const VideoClipExtractor = () => {
       alert("Please assign shot types to all clips");
       return;
     }
-
+  
     setIsExtracting(true);
     setProgress(0);
-
-    for (let i = 0; i < clips.length; i++) {
-      const clip = clips[i];
-      const formData = new FormData();
-      formData.append("video", videoFile);
-      formData.append("start_time", clip.startTime.toString());
-      formData.append("end_time", clip.endTime!.toString());
-      formData.append("shot_type", clip.shotType!);
-
-      try {
+  
+    try {
+      for (let i = 0; i < clips.length; i++) {
+        const clip = clips[i];
+        console.log(`Processing clip ${i + 1}/${clips.length}:`, clip);
+    
+        const formData = new FormData();
+        formData.append("video", videoFile);
+        formData.append("start_time", clip.startTime.toString());
+        formData.append("end_time", clip.endTime.toString());
+        formData.append("shot_type", clip.shotType);
+    
         const response = await fetch("http://localhost:8000/api/extract-clip", {
           method: "POST",
           body: formData,
         });
-
+    
         if (!response.ok) {
           throw new Error(`Failed to process clip ${i + 1}`);
         }
-      } catch (error) {
-        console.error("Error:", error);
-        alert(`Error processing clip ${i + 1}`);
-        break;
+    
+        const clipBlob = await response.blob();
+        console.log(`Clip Blob size: ${clipBlob.size} bytes`);
+    
+        // Get the video file name without extension
+        const videoFileName = videoFile.name.replace(/\.[^/.]+$/, '');
+        const timestamp = `_${clip.startTime}-${clip.endTime}`;
+        const fileName = `${clip.shotType}/${videoFileName}${timestamp}.mp4`;
+    
+        await uploadClipToS3(clipBlob, fileName);
+    
+        setProgress(((i + 1) / clips.length) * 100);
       }
-
-      setProgress(((i + 1) / clips.length) * 100);
+  
+      // All clips processed successfully
+      alert("All clips have been processed and uploaded successfully!");
+      setClips([]); // Reset clips array
+      setCurrentClipIndex(0); // Reset current clip index
+      setIsPreviewMode(false); // Exit preview mode if active
+      
+    } catch (error) {
+      console.error("Error during clip extraction:", error);
+      alert(`Error processing clips: ${error.message}`);
+    } finally {
+      setIsExtracting(false);
+      setProgress(0);
     }
-
-    setIsExtracting(false);
-    setProgress(0);
-    setClips([]);
   };
+  
 
   return (
     <Card className="w-full max-w-4xl mx-auto">
@@ -305,8 +381,8 @@ const VideoClipExtractor = () => {
           Upload a video and press [ to create a clip (1 second before and after
           the current time).
           <br />
-          Keyboard shortcuts: Space (play/pause), [ (create clip), 
-          Left/Right (frame by frame), O (back 10s), P (forward 10s).
+          Keyboard shortcuts: Space (play/pause), [ (create clip), Left/Right
+          (frame by frame), O (back 10s), P (forward 10s).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -318,7 +394,7 @@ const VideoClipExtractor = () => {
             className="w-full"
           />
         </div>
-  
+
         {videoUrl && (
           <div className="space-y-4">
             {/* Video Player */}
@@ -330,7 +406,7 @@ const VideoClipExtractor = () => {
                 onTimeUpdate={handleTimeUpdate}
               />
             </div>
-  
+
             {/* Play/Pause, Current Time, Playback Speed */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -347,7 +423,7 @@ const VideoClipExtractor = () => {
                   )}
                 </Button>
               </div>
-  
+
               <div className="text-center flex items-center space-x-2">
                 <span>Current Time:</span>
                 <Input
@@ -357,7 +433,7 @@ const VideoClipExtractor = () => {
                   className="w-24"
                 />
               </div>
-  
+
               <div className="text-center flex items-center space-x-2">
                 <span>Playback Speed:</span>
                 <div className="flex items-center space-x-2">
@@ -388,7 +464,7 @@ const VideoClipExtractor = () => {
                 </div>
               </div>
             </div>
-  
+
             {/* Navigation and Current Clip Info */}
             {clips.length > 0 && (
               <div className="space-y-4">
@@ -412,17 +488,21 @@ const VideoClipExtractor = () => {
                     Next Clip
                   </Button>
                 </div>
-  
+
                 {/* Current Clip Info */}
                 <div className="border rounded-lg p-4">
-                  <h3 className="text-lg font-medium mb-2">Current Clip Info</h3>
+                  <h3 className="text-lg font-medium mb-2">
+                    Current Clip Info
+                  </h3>
                   <div className="flex flex-col space-y-4">
                     <div className="flex space-x-4 items-center">
                       <div className="flex items-center space-x-2">
                         <span>Start Time:</span>
                         <Input
                           type="text"
-                          value={clips[currentClipIndex]?.startTime.toFixed(3) || ""}
+                          value={
+                            clips[currentClipIndex]?.startTime.toFixed(3) || ""
+                          }
                           onChange={(e) => {
                             const value = parseFloat(e.target.value);
                             if (!isNaN(value) && value >= 0) {
@@ -443,10 +523,15 @@ const VideoClipExtractor = () => {
                         <span>End Time:</span>
                         <Input
                           type="text"
-                          value={clips[currentClipIndex]?.endTime?.toFixed(3) || ""}
+                          value={
+                            clips[currentClipIndex]?.endTime?.toFixed(3) || ""
+                          }
                           onChange={(e) => {
                             const value = parseFloat(e.target.value);
-                            if (!isNaN(value) && value > clips[currentClipIndex]?.startTime) {
+                            if (
+                              !isNaN(value) &&
+                              value > clips[currentClipIndex]?.startTime
+                            ) {
                               setClips((prevClips) => {
                                 const newClips = [...prevClips];
                                 newClips[currentClipIndex] = {
@@ -461,7 +546,7 @@ const VideoClipExtractor = () => {
                         />
                       </div>
                     </div>
-  
+
                     {/* Shot Type Selection */}
                     <div className="flex items-center space-x-2">
                       <span>Shot Type:</span>
@@ -492,7 +577,7 @@ const VideoClipExtractor = () => {
                     </div>
                   </div>
                 </div>
-  
+
                 {/* Preview Clips and Extract Clips */}
                 <div className="space-y-4">
                   <Button
@@ -502,7 +587,7 @@ const VideoClipExtractor = () => {
                   >
                     {isPreviewMode ? "Stop Preview" : "Preview Clips"}
                   </Button>
-  
+
                   <Button
                     className="w-full"
                     onClick={async () => {
@@ -513,10 +598,18 @@ const VideoClipExtractor = () => {
                   >
                     {isExtracting ? "Processing Clips..." : "Extract All Clips"}
                   </Button>
-  
+
                   {isExtracting && (
                     <Progress value={progress} className="w-full" />
                   )}
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteClip}
+                    disabled={clips.length === 0}
+                    className="w-full"
+                  >
+                    Delete Current Clip
+                  </Button>
                 </div>
               </div>
             )}
@@ -524,7 +617,7 @@ const VideoClipExtractor = () => {
         )}
       </CardContent>
     </Card>
-  );  
+  );
 };
 
 export default VideoClipExtractor;
